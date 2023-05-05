@@ -1,5 +1,5 @@
 # generate qa code
-- 1, generate minitree from Data and embedding (StRoot )
+- 1, generate minitree from Data and embedding (StRoot), RCF address: /star/u/jiyj/pwg/Hypertron/data/7p3_2020_2body
 - 2, use runana.sh to read minitree and produce histograms
 - 3, root -b drawData.C
 
