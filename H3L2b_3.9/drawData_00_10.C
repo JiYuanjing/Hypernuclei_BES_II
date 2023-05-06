@@ -613,7 +613,7 @@ TGraphErrors* ptshift(TF1* fit, TH1* h)
   // fit function form should be:     
   // 
   double x1,x2,integral,new_x;
-  int nloops = 3;
+  int nloops = 4;
   for (int il=0;il<nloops;il++){
     cout <<"loop: " <<il<<" ";
     for (int ip =0;ip<h->GetNbinsX();ip++)
