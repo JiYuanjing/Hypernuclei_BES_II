@@ -45,14 +45,18 @@ void readMc(TString mInputlist="quasiMC4.root", int const mode = 0,   TString ou
   if (mcState!=0){
     cout <<"starting book mc functions!" << endl;
     double par[4][3]={ {0.261677, 53.1192, 2.99131}, {0.261677, 53.1192, 2.99131}, {0.181327, 14641, 2.99131}, {0.181327, 14641, 2.99131}};
+    double par_0_80[4][3]={ {0.261677, 53.1192, 2.99131}, {0.261677, 53.1192, 2.99131}, {0.181327, 14641, 2.99131}, {0.181327, 14641, 2.99131}};
+    double par_10_40[4][3]={ {0.315791, 1.27673, 2.99131}, { 0.315791, 1.27673, 2.99131}, { 0.167319, 24701.3, 2.99131}, {  0.167319, 24701.3, 2.99131}};
     // TH1F* hpad = new TH1F("hpad","hpad",1, 0,10);
     // hpad->GetXaxis()->SetRangeUser(1e-10,1);
     // hpad->Draw();
     for (int irap=0;irap<4;irap++) {
       fH3Ldydpt[irap] = new TF1(Form("fH3Ldydpt[%d]",irap), "2*TMath::Pi()*[1]*x*exp(-(sqrt([2]*[2]+x*x))/[0])", 0,5);
       fH3Ldydpt[irap]->SetParameters(par[irap]);
-      // fH3Ldydpt[irap]->Draw("same");
-      // fH3Ldydpt[irap]->SetLineColor(irap+1);
+      if (centL==4 && centH==6) 
+      {  
+        fH3Ldydpt[irap]->SetParameters(par_10_40[irap]);
+      }
     }
 
     ////////uniform  mc pt y distribution/////////

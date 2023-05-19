@@ -45,15 +45,22 @@ void readtree(TString mInputlist="Lambda_tree_mc.root", int const mode = 1,   TS
   //weighting function for MC
   if (mcState!=0){
     cout <<"starting book mc functions!" << endl;
-    double par[4][3]={{0.261677, 53.1192, 2.99131}, {0.261677, 53.1192, 2.99131}, {0.181327, 14641, 2.99131}, {0.181327, 14641, 2.99131}};
+
+    double par[4][3]={ {0.261677, 53.1192, 2.99131}, {0.261677, 53.1192, 2.99131}, {0.181327, 14641, 2.99131}, {0.181327, 14641, 2.99131}};
+    double par_0_80[4][3]={ {0.261677, 53.1192, 2.99131}, {0.261677, 53.1192, 2.99131}, {0.181327, 14641, 2.99131}, {0.181327, 14641, 2.99131}};
+    double par_10_40[4][3]={ {0.315791, 1.27673, 2.99131}, { 0.315791, 1.27673, 2.99131}, { 0.167319, 24701.3, 2.99131}, {  0.167319, 24701.3, 2.99131}};
+    // TH1F* hpad = new TH1F("hpad","hpad",1, 0,10);
+    // hpad->GetXaxis()->SetRangeUser(1e-10,1);
+    // hpad->Draw();
+    //
     for (int irap=0;irap<4;irap++) {
       fH3Ldydpt[irap] = new TF1(Form("fH3Ldydpt[%d]",irap), "2*TMath::Pi()*[1]*x*exp(-(sqrt([2]*[2]+x*x))/[0])", 0,5);
       fH3Ldydpt[irap]->SetParameters(par[irap]);
-      // fH3Ldydpt[irap]->Draw("same");
-      // fH3Ldydpt[irap]->SetLineColor(irap+1);
+      if (centLow==4 && centHigh==6) 
+      {  
+        fH3Ldydpt[irap]->SetParameters(par_10_40[irap]);
+      }
     }
-    // return;
-
     ////////uniform  mc pt y distribution/////////
     TFile* fgpt_0;
     if (mode==0 && mcState==1)
@@ -67,6 +74,11 @@ void readtree(TString mInputlist="Lambda_tree_mc.root", int const mode = 1,   TS
     cout <<"finish book mc weighting functions." << endl;
   }
   ///////////////////////end of MC weighting////////////////
+  
+  // PID for low pt
+  TF1* fbandHe3Low = new TF1("fbandHe3Low","[0]*TMath::Power(x, [1] + [2]*log(x) + [3]*log(x)*log(x))", 0.3, 3);
+  fbandHe3Low->SetParameters(24.7486, -1.00617 ,0.148165, 0.184242);
+
 
   cout <<"start read tree!" << endl;
   TString treename;
@@ -162,16 +174,6 @@ void readtree(TString mInputlist="Lambda_tree_mc.root", int const mode = 1,   TS
   // htriton_tree.SetBranchAddress("dca_he",&dca_he);
   // htriton_tree.SetBranchAddress("dca_pi",&dca_pi);
 
-  htriton_tree.SetBranchAddress("px_pi",&px_pi);
-  htriton_tree.SetBranchAddress("py_pi",&py_pi);
-  htriton_tree.SetBranchAddress("pz_pi",&pz_pi);
-  htriton_tree.SetBranchAddress("px_he",&px_he);
-  htriton_tree.SetBranchAddress("py_he",&py_he);
-  htriton_tree.SetBranchAddress("pz_he",&pz_he);
-  htriton_tree.SetBranchAddress("dedx_he",&dedx_he);
-  htriton_tree.SetBranchAddress("dedx_pi",&dedx_pi);
-  htriton_tree.SetBranchAddress("nhitsdedx_pi",&nhitsdedx_pi);
-  htriton_tree.SetBranchAddress("nhitsdedx_he",&nhitsdedx_he);
   htriton_tree.SetBranchAddress("nhits_pi",&nhits_pi);
   htriton_tree.SetBranchAddress("nhits_he",&nhits_he);
   htriton_tree.SetBranchAddress("ht_bdfvtx",&ht_bdfvtx);
@@ -269,18 +271,16 @@ void readtree(TString mInputlist="Lambda_tree_mc.root", int const mode = 1,   TS
   }
   ////////////////////////////////////////////////////////////////
 
-  Long64_t n_Entries = htriton_tree.GetEntries();
+  double n_Entries = htriton_tree.GetEntries();
   cout <<"start process "<< n_Entries<<" events" << endl;
 
-  for (int i=0;i<n_Entries;i++)
+  for (Long64_t i=0;i<n_Entries;i++)
   {
     htriton_tree.GetEntry(i); 
-    if (i%100000==0) cout <<"read "<<i<<" events!" << endl;
+    if (i%1000000==0) cout <<"read "<<i<<" events!" << endl;
+
     if ( !(bismc == mcState)  ) continue;
     if (cent9<centLow || cent9>centHigh) continue; // since no official centraltiy definition, so remove cut
-
-    // if (DEBUG) 
-    //   cout <<bparticlemass<<" "<<weight<<endl;
 
     double ptweight = 1; //reserved
     double rapweight = 1;
@@ -318,12 +318,9 @@ void readtree(TString mInputlist="Lambda_tree_mc.root", int const mode = 1,   TS
         if (bmcrap<-0.75) ptweight = fH3Ldydpt[1]->Eval(mcMotherPt);
       }
     }
-    // cout << mcMotherPt <<" "<<mcweight<<" "<<ptweight<<" "<<rapweight<<endl;
+    
     double gweight=1; //centrality weight 
 
-    // double wt_l = TMath::Exp(-1*bmcpl*1e2/2.998*( 1./223. - 1./263.)); 
-    // double weight = ptweight*rapweight*mcweight*gweight*wt_l;
-    // double weight = 1;
     double weight = ptweight*rapweight*mcweight*gweight;
     if (mcState==0) weight = gweight; 
     if (mode==0) {
@@ -351,26 +348,62 @@ void readtree(TString mInputlist="Lambda_tree_mc.root", int const mode = 1,   TS
       double he_pt = sqrt(px_he*px_he+py_he*py_he);
       double p_pi = sqrt(px_pi*px_pi+py_pi*py_pi+pz_pi*pz_pi);
       double p_He = sqrt(px_he*px_he+py_he*py_he+pz_he*pz_he);
+      bool isHe = (p_He>0.5)?true: dedx_he>fbandHe3Low->Eval(p_He)-7; // add additional cuts
 
-      bool dcaCut = pi_pt>0.1 && he_pt>0.1;
-      bool nhitscut = nhits_he>20 && nhits_pi>20;
+      // bool dcaCut = pi_pt>0.1 && he_pt>0.1 && p_He<0.5?dedx_he > fbandHe3Low->Eval(p_He):1;
+      bool dcaCut = pi_pt>0.1 && he_pt>0.1 && isHe;
+      // bool nhitsdedxcut = nhitsdedx_he>10 && nhitsdedx_pi>10;
+      bool nhitsdedxcut = true;
+      bool nhitscut = nhits_he>20 && nhits_pi>20 && nhitsdedxcut;
+      // if (centLow==4 && centHigh==6) nhits_he>15 && nhits_pi>15;
       //default cut
-      double lcut=1, ldlcut=3, chi2topocut = 4., chi2ndfcut=3.5, chi2_hecut=0, chi2_picut=10, pHecutLow=0, pHecut=50, ppicut=50, bplcut=0;
+      double lcut=2, lcuthigh=2e2, ldlcut=3, chi2topocut = 4., chi2ndfcut=3.5, chi2_hecut=0, chi2_picut=10, pHecutLow=0.4, pHecut=500, ppicut=500, bplcut=0;
       bool PIDcut = (fabs(p_He)<pHecut && fabs(p_pi)<ppicut);
-      if (H3Ly<-0.5) chi2_hecut=5;
-      if (centLow>=7) { chi2topocut = 4.5; chi2_picut=7;} 
+      if (centLow>=7) { 
+        chi2topocut = 4.5; chi2_picut=7;
+        if (H3Ly<-0.5) 
+         { chi2_hecut=5; }  
+      } 
+      if (centLow==4 && centHigh==6) { 
+        chi2_hecut=0;
+        chi2ndfcut=3.5;
+        chi2topocut=4.;
+        lcut=3;
+        if (H3Ly<-0.5) 
+        { 
+          chi2_hecut=3; chi2_picut=8;lcut=3; chi2ndfcut=5; chi2topocut=3.5; 
+          if (H3LpT<1.2) lcut=5;
+          // test TMVA cuts
+          // chi2_hecut=0; chi2_picut=8.75;chi2ndfcut=3.9; chi2topocut=5; lcut=1.95; lcuthigh = 66;
+        }
 
-      bool passTopoCuts = ht_l >lcut && ht_ldl>ldlcut && ht_chi2topo<chi2topocut && ht_chi2topo>0 &&  fabs(p_He)>pHecutLow && fabs(p_He)<pHecut && fabs(p_pi)<ppicut && ht_chi2ndf<chi2ndfcut && ht_chi2ndf>0  && chi2primary_pi>chi2_picut && chi2primary_he>chi2_hecut && bpl>bplcut && dcaCut && nhitscut;
+      } 
+
+      //for He3 PID
+      bool passTopoCuts = ht_l >lcut&& ht_l>lcuthigh && ht_ldl>ldlcut && ht_chi2topo<chi2topocut && ht_chi2topo>0 &&  fabs(p_He)>pHecutLow && fabs(p_He)<pHecut && fabs(p_pi)<ppicut && ht_chi2ndf<chi2ndfcut && ht_chi2ndf>0  && chi2primary_pi>chi2_picut && chi2primary_he>chi2_hecut && bpl>bplcut && dcaCut && nhitscut;
 
       int const nmax = 20;
       bool passTopoCutsSys[nmax];
       // double lcut1 = 1, lcut2 = 1, ldlcut1 = 3, ldlcut2 = 3; // very loose cuts
-      double  chi2topocut1 = 3.5, chi2topocut2 = 4.5;
-      if (centLow>=7) { chi2topocut1 = 4; chi2topocut2 = 4.5;} 
-      double  chi2ndfcut1 = 2.5, chi2ndfcut2 = 4;
-      double  chi2_picut1= 7, chi2_picut2 = 13;
-       if (centLow>=7) { chi2_picut1 = 4; chi2_picut2 = 10;}
-      double  nhitscut1= 15, nhitscut2 = 25;
+      double  chi2topocut1 = 3., chi2topocut2 = 4.5;
+      double  chi2ndfcut1 = 2.5, chi2ndfcut2 = 4.5;
+      double lcut1=1,lcut2=3;
+      if (centLow>=7) { chi2topocut1 = 3.5; chi2topocut2 = 5.5;} 
+      if (centLow==4 && centHigh==6) {  
+        chi2ndfcut1 = 3.; chi2ndfcut2 = 4.5; 
+        chi2topocut1 = 3.5; chi2topocut2 = 4.5;
+        lcut1=1;lcut2=5;
+         if (H3Ly<-0.5) 
+        {  
+          chi2ndfcut1=4; chi2ndfcut2=6; 
+        }
+       
+      }
+      double  chi2_picut1= 6, chi2_picut2 = 15;
+      if (centLow>=7) { chi2_picut1 = 4; chi2_picut2 = 10;}
+      // int nhitscut1= 15; int nhitscut2 = 25;
+      bool nhitscut1 = nhits_he>15 && nhits_pi>15 && nhitsdedxcut;
+      bool nhitscut2 = nhits_he>25 && nhits_pi>25 && nhitsdedxcut;
 
       int ncuts=0; 
       // passTopoCutsSys[ncuts++] = ht_l >lcut1 && ht_ldl>ldlcut && ht_chi2topo<chi2topocut && fabs(p_He)<pHecut && fabs(p_pi)<ppicut && ht_chi2ndf<chi2ndfcut && chi2primary_pi>chi2_picut && chi2primary_he>chi2_hecut && bpl>bplcut && dcaCut && nhitscut;
@@ -383,20 +416,23 @@ void readtree(TString mInputlist="Lambda_tree_mc.root", int const mode = 1,   TS
       passTopoCutsSys[ncuts++] = ht_l >lcut && ht_ldl>ldlcut && ht_chi2topo<chi2topocut  && fabs(p_He)>pHecutLow && fabs(p_He)<pHecut && fabs(p_pi)<ppicut && ht_chi2ndf<chi2ndfcut2 && chi2primary_pi>chi2_picut && chi2primary_he>chi2_hecut && bpl>bplcut && dcaCut  && nhitscut;
       passTopoCutsSys[ncuts++] = ht_l >lcut && ht_ldl>ldlcut && ht_chi2topo<chi2topocut  && fabs(p_He)>pHecutLow && fabs(p_He)<pHecut && fabs(p_pi)<ppicut && ht_chi2ndf<chi2ndfcut && chi2primary_pi>chi2_picut1 && chi2primary_he>chi2_hecut && bpl>bplcut && dcaCut  && nhitscut;
       passTopoCutsSys[ncuts++] = ht_l >lcut && ht_ldl>ldlcut && ht_chi2topo<chi2topocut  && fabs(p_He)>pHecutLow && fabs(p_He)<pHecut && fabs(p_pi)<ppicut && ht_chi2ndf<chi2ndfcut && chi2primary_pi>chi2_picut2 && chi2primary_he>chi2_hecut && bpl>bplcut && dcaCut  && nhitscut;
-      passTopoCutsSys[ncuts++] = ht_l >lcut && ht_ldl>ldlcut && ht_chi2topo<chi2topocut && ht_chi2topo>0 &&  fabs(p_He)>pHecutLow && fabs(p_He)<pHecut && fabs(p_pi)<ppicut && ht_chi2ndf<chi2ndfcut && ht_chi2ndf>0  && chi2primary_pi>chi2_picut && chi2primary_he>chi2_hecut && bpl>bplcut && dcaCut && nhits_he>nhitscut1 && nhits_pi>nhitscut1;
-      passTopoCutsSys[ncuts++] = ht_l >lcut && ht_ldl>ldlcut && ht_chi2topo<chi2topocut && ht_chi2topo>0 &&  fabs(p_He)>pHecutLow && fabs(p_He)<pHecut && fabs(p_pi)<ppicut && ht_chi2ndf<chi2ndfcut && ht_chi2ndf>0  && chi2primary_pi>chi2_picut && chi2primary_he>chi2_hecut && bpl>bplcut && dcaCut && nhits_he>nhitscut2 && nhits_pi>nhitscut2;
+      passTopoCutsSys[ncuts++] = ht_l >lcut1 && ht_ldl>ldlcut && ht_chi2topo<chi2topocut  && fabs(p_He)>pHecutLow && fabs(p_He)<pHecut && fabs(p_pi)<ppicut && ht_chi2ndf<chi2ndfcut && chi2primary_pi>chi2_picut && chi2primary_he>chi2_hecut && bpl>bplcut && dcaCut  && nhitscut;
+      passTopoCutsSys[ncuts++] = ht_l >lcut2 && ht_ldl>ldlcut && ht_chi2topo<chi2topocut  && fabs(p_He)>pHecutLow && fabs(p_He)<pHecut && fabs(p_pi)<ppicut && ht_chi2ndf<chi2ndfcut && chi2primary_pi>chi2_picut && chi2primary_he>chi2_hecut && bpl>bplcut && dcaCut  && nhitscut;
+      passTopoCutsSys[ncuts++] = ht_l >lcut && ht_ldl>ldlcut && ht_chi2topo<chi2topocut && ht_chi2topo>0 &&  fabs(p_He)>pHecutLow && fabs(p_He)<pHecut && fabs(p_pi)<ppicut && ht_chi2ndf<chi2ndfcut && ht_chi2ndf>0  && chi2primary_pi>chi2_picut && chi2primary_he>chi2_hecut && bpl>bplcut && dcaCut && nhitscut1;
+      passTopoCutsSys[ncuts++] = ht_l >lcut && ht_ldl>ldlcut && ht_chi2topo<chi2topocut && ht_chi2topo>0 &&  fabs(p_He)>pHecutLow && fabs(p_He)<pHecut && fabs(p_pi)<ppicut && ht_chi2ndf<chi2ndfcut && ht_chi2ndf>0  && chi2primary_pi>chi2_picut && chi2primary_he>chi2_hecut && bpl>bplcut && dcaCut && nhitscut2;
 
       // //below is for tune cuts
-      // passTopoCutsSys[ncuts++] = ht_l >lcut && ht_ldl>ldlcut && ht_chi2topo<chi2topocut && ht_chi2topo>0 &&  fabs(p_He)>pHecutLow && fabs(p_He)<pHecut && fabs(p_pi)<ppicut && ht_chi2ndf<chi2ndfcut && ht_chi2ndf>0  && chi2primary_pi>chi2_picut && chi2primary_he>2 && bpl>bplcut && dcaCut && nhits_he>20 && nhits_pi>20;
+      // passTopoCutsSys[ncuts++] = ht_l > 5 && ht_l<35 && ht_ldl>ldlcut && ht_chi2topo<4.  && ht_chi2topo>0 &&  fabs(p_He)>pHecutLow && fabs(p_He)<pHecut && fabs(p_pi)<ppicut && ht_chi2ndf< 2.5 && ht_chi2ndf>0  && chi2primary_pi> 13 && chi2primary_he>2 && dcaCut && nhits_he>20 && nhits_pi>20 && dca_pi<5 && dca_he<1;
+      // passTopoCutsSys[ncuts++] = ht_l > 5 && ht_l<35 && ht_ldl>ldlcut && ht_chi2topo<4.  && ht_chi2topo>0 &&  fabs(p_He)>pHecutLow && fabs(p_He)<pHecut && fabs(p_pi)<ppicut && ht_chi2ndf< 2.5 && ht_chi2ndf>0  && chi2primary_pi> 13 && chi2primary_he>2 && dcaCut && nhits_he>20 && nhits_pi>20 && dca_pi<5 && dca_he<0.2;
       // passTopoCutsSys[ncuts++] = ht_l >lcut && ht_ldl>ldlcut && ht_chi2topo<chi2topocut && ht_chi2topo>0 &&  fabs(p_He)>pHecutLow && fabs(p_He)<pHecut && fabs(p_pi)<ppicut && ht_chi2ndf<chi2ndfcut && ht_chi2ndf>0  && chi2primary_pi>chi2_picut && chi2primary_he>5 && bpl>bplcut && dcaCut && nhits_he>20 && nhits_pi>20;
       // passTopoCutsSys[ncuts++] = ht_l >lcut && ht_ldl>ldlcut && ht_chi2topo<chi2topocut && ht_chi2topo>0 &&  fabs(p_He)>pHecutLow && fabs(p_He)<pHecut && fabs(p_pi)<ppicut && ht_chi2ndf<chi2ndfcut && ht_chi2ndf>0  && chi2primary_pi>chi2_picut && chi2primary_he>8 && bpl>bplcut && dcaCut && nhits_he>20 && nhits_pi>20;
       // passTopoCutsSys[ncuts++] = ht_l >1 && ht_ldl>3 && ht_chi2topo<3  && fabs(p_He)>pHecutLow && fabs(p_He)<pHecut && fabs(p_pi)<ppicut && ht_chi2ndf<3.5 && chi2primary_pi>0 && chi2primary_he>0 && bpl>0 && dcaCut  && nhitscut;
-      // passTopoCutsSys[ncuts++] = ht_l >1 && ht_ldl>3 && ht_chi2topo<3  && fabs(p_He)>pHecutLow && fabs(p_He)<pHecut && fabs(p_pi)<ppicut && ht_chi2ndf<3.5 && chi2primary_pi>3 && chi2primary_he>0 && bpl>0 && dcaCut  && nhitscut;
-      // passTopoCutsSys[ncuts++] = ht_l >1 && ht_ldl>3 && ht_chi2topo<2.5  && fabs(p_He)>pHecutLow && fabs(p_He)<pHecut && fabs(p_pi)<ppicut && ht_chi2ndf<3.5 && chi2primary_pi>5 && chi2primary_he>0 && bpl>0 && dcaCut  && nhitscut;
-      // passTopoCutsSys[ncuts++] = ht_l >1 && ht_ldl>3 && ht_chi2topo<2.5  && fabs(p_He)>pHecutLow && fabs(p_He)<pHecut && fabs(p_pi)<ppicut && ht_chi2ndf<3.5 && chi2primary_pi>3 && chi2primary_he>0 && bpl>0 && dcaCut  && nhitscut;
-      // passTopoCutsSys[ncuts++] = ht_l >1 && ht_ldl>3 && ht_chi2topo<3 && fabs(p_He)>pHecutLow && fabs(p_He)<pHecut && fabs(p_pi)<ppicut && ht_chi2ndf<3.5 && chi2primary_pi>5 && chi2primary_he>0 && bpl>0 && dcaCut  && nhitscut;
-      // passTopoCutsSys[ncuts++] = ht_l >1 && ht_ldl>3 && ht_chi2topo<3 && fabs(p_He)>pHecutLow && fabs(p_He)<pHecut && fabs(p_pi)<ppicut && ht_chi2ndf<2.5 && chi2primary_pi>40 && chi2primary_he>10  && dcaCut  && nhitscut;
-
+      // passTopoCutsSys[ncuts++] = ht_l >1 && ht_ldl>3 && ht_chi2topo<4  && fabs(p_He)>pHecutLow && fabs(p_He)<pHecut && fabs(p_pi)<ppicut && ht_chi2ndf<3.5 && chi2primary_pi>3 && chi2primary_he>0 && bpl>0 && dcaCut  && nhitscut;
+      // passTopoCutsSys[ncuts++] = ht_l >1 && ht_ldl>3 && ht_chi2topo<4  && fabs(p_He)>pHecutLow && fabs(p_He)<pHecut && fabs(p_pi)<ppicut && ht_chi2ndf<3.5 && chi2primary_pi>15 && chi2primary_he>0 && bpl>0 && dcaCut  && nhitscut;
+      // passTopoCutsSys[ncuts++] = ht_l >1 && ht_ldl>3 && ht_chi2topo<4  && fabs(p_He)>pHecutLow && fabs(p_He)<pHecut && fabs(p_pi)<ppicut && ht_chi2ndf<3.5 && chi2primary_pi>10 && chi2primary_he>0 && bpl>0 && dcaCut  && nhitscut;
+      // passTopoCutsSys[ncuts++] = ht_l >5 && ht_ldl>3 && ht_chi2topo<4 && fabs(p_He)>pHecutLow && fabs(p_He)<pHecut && fabs(p_pi)<ppicut && ht_chi2ndf<3.5 && chi2primary_pi>15 && chi2primary_he>0 && bpl>0 && dcaCut  && nhitscut;
+      // passTopoCutsSys[ncuts++] = ht_l >5 && ht_ldl>3 && ht_chi2topo<4 && fabs(p_He)>pHecutLow && fabs(p_He)<pHecut && fabs(p_pi)<ppicut && ht_chi2ndf<2.5 && chi2primary_pi>20 && chi2primary_he>1  && dcaCut  && nhitscut;
+      //
       // topo qa cuts
       bool qaldlcuts= ht_l >lcut &&  ht_chi2topo<chi2topocut && fabs(p_He)<pHecut && fabs(p_pi)<ppicut && ht_chi2ndf<chi2ndfcut && chi2primary_pi>chi2_picut && chi2primary_he>chi2_hecut && bpl>bplcut && dcaCut && nhitscut;
       bool qalcuts=ht_ldl>ldlcut && ht_chi2topo<chi2topocut && fabs(p_He)<pHecut && fabs(p_pi)<ppicut && ht_chi2ndf<chi2ndfcut && chi2primary_pi>chi2_picut && chi2primary_he>chi2_hecut && bpl>bplcut && dcaCut  && nhitscut;

@@ -7,22 +7,28 @@ bool savepng=false;
 int ntmpfitplots=0;
 int nsignalpdfpages=0;
 bool savesignalpdf=false;
-double SumHist( double lowpt, double highpt, TH1* hinvpt, TF1* fitfun, double& sumerr)
-{
-  double sum=0,tmp=0,err=0;
-  for (int ip=0;ip<hinvpt->GetNbinsX();ip++)
-  {
-    tmp = hinvpt->GetBinContent(ip+1)*2*3.1415169265*hinvpt->GetBinCenter(ip+1)*hinvpt->GetBinWidth(ip+1); // [d2N/(2pi*pT*dpTdy)] * (2pi*pT*dpT)
-    sum+=tmp;
-    err+=pow( hinvpt->GetBinError(ip+1)*2*3.1415169265*hinvpt->GetBinCenter(ip+1)*hinvpt->GetBinWidth(ip+1), 2);
-  }
-  
-  double fraction = fitfun->Integral(hinvpt->GetBinLowEdge(1), hinvpt->GetBinLowEdge(hinvpt->GetNbinsX())+hinvpt->GetBinWidth(hinvpt->GetNbinsX()))/fitfun->Integral(lowpt,highpt); 
-  double sumfrac = sum/fraction; 
-  sumerr = sqrt(err)/fraction;
-  
-  return sumfrac;
 
+void graphscale(TGraphErrors* g, double scale)
+{
+  double x, y, err;
+  for (int i=0;i<g->GetN();i++)
+  {
+    g->GetPoint( i, x, y);
+    err = g->GetErrorY(i);
+    g->SetPoint( i, x, y*scale);
+    g->SetPointError(i, 0, err*scale);
+  }
+}
+void graphscale(TGraph* g, double scale)
+{
+  double x, y, err;
+  for (int i=0;i<g->GetN();i++)
+  {
+    g->GetPoint( i, x, y);
+    // err = g->GetErrorY(i);
+    g->SetPoint( i, x, y*scale);
+    // g->SetPointError(i, 0, err*scale);
+  }
 }
 TGraphErrors* combinechannels(TGraphErrors* g2b, TGraphErrors* g3b, TString gname)
 {
@@ -132,7 +138,7 @@ TH1F* reBinHist(double xmid,double xlow, double xhigh, TH1F* h, int n)
 }
 Double_t linebk(Double_t* x, Double_t* par)
 {
-  if (x[0]>2.98 && x[0]<3.005) TF1::RejectPoint();
+  if (x[0]>2.987 && x[0]<2.997) TF1::RejectPoint();
   return par[0]+x[0]*par[1];
 }
 double fityield2(  TString histname, double lowpt, double highpt, double lowy, double highy, double& err, TFile* f1, TFile* f2, TCanvas* c, TPDF* pdf, int centL=5, int centH=9,int mode=1)
@@ -162,8 +168,6 @@ double fityield2(  TString histname, double lowpt, double highpt, double lowy, d
   hsig->SetLineColor(kRed);
   hsig->GetXaxis()->SetRangeUser(2.97,3.04);
   // hsig->GetXaxis()->SetRangeUser(2.97,3.02);
-  hsig->Rebin();
-  hbk->Rebin();
   hsig->Draw();
   hsig->GetXaxis()->SetTitle("Mass({}^{3}He#pi) (GeV/c^{2})");
   hsig->GetYaxis()->SetTitle(Form("Counts per %0.1f MeV",hsig->GetBinWidth(1)*1000));
@@ -176,7 +180,7 @@ double fityield2(  TString histname, double lowpt, double highpt, double lowy, d
   drawLatex( 0.18,0.7,Form("nEvents=%0.0f M", nEvents_se/1e6), 0.055);
   drawLatex( 0.18,0.61,Form("%0.2f<y<%0.2f",lowy, highy ), 0.055);
   drawLatex( 0.18,0.54,Form("%0.1f<p_{T}<%0.1f GeV/c^{2}", lowpt, highpt), 0.055);
-  drawLatex( 0.18,0.47,Form("%d-%d%s",centname[centH],centname[centL-1], "%"), 0.055);
+  drawLatex( 0.18,0.47,Form("0-80%s", "%"), 0.055);
   addpdf(pdf); 
 
   if (savepng) gPad->SaveAs(Form("plots/png/%d.png", npages++));
@@ -194,23 +198,21 @@ double fityield2(  TString histname, double lowpt, double highpt, double lowy, d
   // TF1* resfit = new TF1("resfit","pol1", 2.95,3.05 );
   TF1* resfit = new TF1("resfit",linebk, 2.95,3.05,2 );
   
-  hsig_bk->GetXaxis()->SetRangeUser(2.97,3.025);
-  TFitResultPtr r_bk = hsig_bk->Fit(resfit,"RN0S");
+  hsig_bk->GetXaxis()->SetRangeUser(2.97,3.04);
+  hsig_bk->Fit(resfit,"RN0");
   fit->SetLineColor(kRed);
-  double yield_bc = hsig_bk->Integral(hsig_bk->GetXaxis()->FindBin(2.985), hsig_bk->GetXaxis()->FindBin(3.));
+  double yield_bc = hsig_bk->Integral(hsig_bk->GetXaxis()->FindBin(2.98), hsig_bk->GetXaxis()->FindBin(3.));
   // double para[5]={yield_bc*hsig_bk->GetBinWidth(1)/sqrt(2*3.1415), 2.991, 0.0015,  resfit->GetParameter(0), resfit->GetParameter(1)};
   double para[7]={yield_bc*hsig_bk->GetBinWidth(1), 2.992, 0.0014,  resfit->GetParameter(0), resfit->GetParameter(1),0,0};
   fit->SetParameters(para);
-  fit->SetParLimits(1, 2.988, 2.996);
-  fit->SetParLimits(2, 0.001, 0.0025);
-  double lowx=2.97 ,highx =3.025;
+  double lowx=2.97 ,highx =3.02;
   hsig_bk->GetXaxis()->SetRangeUser(lowx,highx);
   hsig_bk->Draw("same");
   hsig_bk->Fit(fit,"RN0");
   fit->GetParameters(para);
 
-  // resfit->SetParameter(0, fit->GetParameter(3));
-  // resfit->SetParameter(1, fit->GetParameter(4));
+  resfit->SetParameter(0, fit->GetParameter(3));
+  resfit->SetParameter(1, fit->GetParameter(4));
   setHistStyle(resfit, kRed-2, 9, 2.5 ,1);
   drawLine(lowx, 0, highx, 0, 1.5, 2, 1 );
 
@@ -229,28 +231,20 @@ double fityield2(  TString histname, double lowpt, double highpt, double lowy, d
 
   double sigma = fit->GetParameter(2);
   double mean = fit->GetParameter(1);
-  double yield_fit = (fit->GetParameter(0))/hsig_bk->GetBinWidth(1);
-  double err_fit= (fit->GetParError(0))/hsig_bk->GetBinWidth(1);
-  double s_fit = yield_fit/(fit->GetParError(0)/hsig_bk->GetBinWidth(1));
+  double yield_me = (fit->GetParameter(0))/hsig_bk->GetBinWidth(1);
   // double yield_counts = hsig_bk->IntegralAndError(hsig_bk->GetXaxis()->FindBin(2.987), hsig_bk->GetXaxis()->FindBin(2.998), err, "width")-resfit->Integral( 2.987, 2.998)/hsig_bk->GetBinWidth(1);
-  double err_sig=0,err_res=0;
-  double yield_counts = hsig_bk->IntegralAndError(hsig_bk->GetXaxis()->FindBin(2.985), hsig_bk->GetXaxis()->FindBin(3.00), err_sig, "")-resfit->Integral( 2.985, 3.00)/hsig_bk->GetBinWidth(1);
-  // err_res = resfit->IntegralError(2.985, 3., r_bk->GetParams(),r_bk->GetCovarianceMatrix().GetMatrixArray() )/hsig_bk->GetBinWidth(1);;
-  // err = sqrt(err_sig*err_sig+err_res*err_res);
-  err = err_fit;
- 
-  // double bk_counts = hbk->Integral(hbk->GetXaxis()->FindBin(mean-2.5*sigma), hbk->GetXaxis()->FindBin(mean+2.5*sigma));
-  double sp_counts = hsig->Integral(hbk->GetXaxis()->FindBin(2.987), hbk->GetXaxis()->FindBin(2.997));
+  double yield_counts = hsig_bk->IntegralAndError(hsig_bk->GetXaxis()->FindBin(2.985), hsig_bk->GetXaxis()->FindBin(3.), err, "")-resfit->Integral( 2.985, 3.)/hsig_bk->GetBinWidth(1);
+  double bk_counts = hbk->Integral(hbk->GetXaxis()->FindBin(mean-2.5*sigma), hbk->GetXaxis()->FindBin(mean+2.5*sigma));
+  double sp_counts = hsig->Integral(hbk->GetXaxis()->FindBin(mean-2.5*sigma), hbk->GetXaxis()->FindBin(mean+2.5*sigma));
   double significance = yield_counts/sqrt(sp_counts);
+  // double s_me = yield_me/(fit->GetParError(0)/hsig_bk->GetBinWidth(1));
   // err = hsig_bk->Integral(hsig_bk->GetXaxis()->FindBin(2.987), hsig_bk->GetXaxis()->FindBin(2.998))-resfit->Integral( 2.987, 2.998)/hsig_bk->GetBinWidth(1);
  
   drawLatex( 0.2,0.82,Form("ME/SE=%0.2f", 1./scale), 0.055);
-  // drawLatex( 0.2,0.75,Form("Yield=%0.2f", yield_counts), 0.055);
-  drawLatex( 0.2,0.75,Form("Yield=%0.2f", yield_fit), 0.055);
+  drawLatex( 0.2,0.75,Form("Yield=%0.2f", yield_counts), 0.055);
   drawLatex( 0.2,0.68,Form("#sigma=%0.2f MeV", sigma*1000.), 0.055);
   drawLatex( 0.2,0.61,Form("nEvents=%0.0f M", nEvents_se/1e6), 0.055);
-  // drawLatex( 0.2,0.54,Form("S/#sqrt{S+B}=%0.1f", significance), 0.055);
-  drawLatex( 0.2,0.54,Form("S/#sqrt{S+B}=%0.1f", s_fit), 0.055);
+  drawLatex( 0.2,0.54,Form("S/#sqrt{S+B}=%0.1f", significance), 0.055);
   drawLatex( 0.2,0.4,Form("Mean=%0.4f", mean), 0.055);
   drawLatex( 0.62,0.61,Form("%0.2f<y<%0.2f",lowy, highy ), 0.055);
   drawLatex( 0.62,0.54,Form("%0.1f<p_{T}<%0.1f GeV/c^{2}", lowpt, highpt), 0.055);
@@ -265,10 +259,8 @@ double fityield2(  TString histname, double lowpt, double highpt, double lowy, d
   if (savepng) gPad->SaveAs(Form("plots/png/%d.png", npages++));
   if (savesignalpdf) gPad->SaveAs(Form("plots/signalpdf/%d.pdf", nsignalpdfpages++));
 
-  // return (significance>1.6)?yield_counts:0;
-  return (significance>1.2)?yield_counts:0; // for systematic calculation
+  return (significance>1.6)?yield_counts:0;
 }
-
 void drawMixDataScanSys_yield(int icut, TString histname, TString topohistname, TString pdfname, double topocut, double& Br, double & error, int pfitmode,int centL=5, int centH=9)
 {
   double highpt = 10, lowpt = 0, lowy=-1.5, highy = 0.;
@@ -282,18 +274,18 @@ void drawMixDataScanSys_yield(int icut, TString histname, TString topohistname, 
   gStyle->SetPalette(1);
 
   TFile *f1 = TFile::Open(Form("fout_H3L_data_KF_%d_%d.root", centname[centH],centname[centL-1])); 
-  TH3F* h3sig = (TH3F*)f1->Get(histname.Data())->Clone("hptH3Lmass_sig");
-  h3sig->SetDirectory(0);
-  // TH3F* h3sig->Project3D("xz");
-  TH1F* hsig = (TH1F*)h3sig->ProjectionY("hsig", h3sig->GetXaxis()->FindBin(lowpt+1e-6),  h3sig->GetXaxis()->FindBin(highpt-1e-6), h3sig->GetZaxis()->FindBin(lowy), h3sig->GetZaxis()->FindBin(highy));
+  TH3F* h2sig = (TH3F*)f1->Get(histname.Data())->Clone("hptH3Lmass_sig");
+  h2sig->SetDirectory(0);
+  // TH3F* h2sig->Project3D("xz");
+  TH1F* hsig = (TH1F*)h2sig->ProjectionY("hsig", h2sig->GetXaxis()->FindBin(lowpt+1e-6),  h2sig->GetXaxis()->FindBin(highpt-1e-6), h2sig->GetZaxis()->FindBin(lowy), h2sig->GetZaxis()->FindBin(highy));
   hsig->SetDirectory(0);
   TH1F* hcent_se = (TH1F*)f1->Get("hcent")->Clone("hcent_se");
   double nEvents_se = hcent_se->Integral( centL,centH);
 
   TFile *f2 = TFile::Open(Form("fout_H3L_data_RT_%d_%d.root", centname[centH],centname[centL-1] )); 
-  TH3F* h3bk = (TH3F*)f2->Get(histname.Data())->Clone("hptH3Lmass_bk");
-  h3bk->SetDirectory(0);
-  TH1F* hbk = (TH1F*)h3bk->ProjectionY("hbk", h3sig->GetXaxis()->FindBin(lowpt+1e-6),  h3sig->GetXaxis()->FindBin(highpt-1e-6), h3bk->GetZaxis()->FindBin(lowy), h3bk->GetZaxis()->FindBin(highy));
+  TH3F* h2bk = (TH3F*)f2->Get(histname.Data())->Clone("hptH3Lmass_bk");
+  h2bk->SetDirectory(0);
+  TH1F* hbk = (TH1F*)h2bk->ProjectionY("hbk", h2sig->GetXaxis()->FindBin(lowpt+1e-6),  h2sig->GetXaxis()->FindBin(highpt-1e-6), h2bk->GetZaxis()->FindBin(lowy), h2bk->GetZaxis()->FindBin(highy));
   hbk->SetDirectory(0);
 
   //scale
@@ -307,7 +299,7 @@ void drawMixDataScanSys_yield(int icut, TString histname, TString topohistname, 
   hbk->Rebin();
 
   hsig->Draw();
-  hsig->GetXaxis()->SetTitle("Mass({}^{3}He#pi) (GeV/c^{2})");
+  hsig->GetXaxis()->SetTitle("Mass(p#pid) (GeV/c^{2})");
   hsig->GetYaxis()->SetTitle("Counts");
   hsig->GetYaxis()->SetRangeUser(-0.1*hsig->GetMaximum(), hsig->GetMaximum()*1.1);
   
@@ -322,7 +314,7 @@ void drawMixDataScanSys_yield(int icut, TString histname, TString topohistname, 
   drawLatex( 0.65,0.61,Form("%0.1f<y<%0.1f",lowy, highy ), 0.055);
   drawLatex( 0.65,0.54,Form("%0.1f<p_{T}<%0.1f GeV/c^{2}", lowpt, highpt), 0.055);
   // drawLatex( 0.65,0.47,Form("5-40%s", "%"), 0.055);
-  drawLatex( 0.65,0.47,Form("%d-%d%s",centname[centH],centname[centL-1],"%"), 0.055);
+  drawLatex( 0.65,0.47,Form("0-80%s", "%"), 0.055);
   // drawBox( 2.97, hsig->GetMinimum(),2.98, hsig->GetMaximum()*0.5 , kBlue-9, 1001 , 1,0.3); 
   // drawBox( 3.01, hsig->GetMinimum(),3.02, hsig->GetMaximum()*0.5 , kBlue-9, 1001,1,0.3 ); 
 
@@ -362,7 +354,7 @@ void drawMixDataScanSys_yield(int icut, TString histname, TString topohistname, 
   // double yield_me = fit->GetParameter(0)/hsig_bk->GetBinWidth(1)*fit->GetParameter(2)*sqrt(2*3.1415);
   double yield_me = fit->GetParameter(0)/hsig_bk->GetBinWidth(1);
   double yield_counts = hsig_bk->Integral(hsig_bk->GetXaxis()->FindBin(mean-3*sigma), hsig_bk->GetXaxis()->FindBin(mean+3*sigma))-resfit->Integral(mean-3*sigma,mean+3*sigma)/hsig_bk->GetBinWidth(1);
-  // double bk_counts = hbk->Integral(hbk->GetXaxis()->FindBin(mean-2.5*sigma), hbk->GetXaxis()->FindBin(mean+2.5*sigma));
+  double bk_counts = hbk->Integral(hbk->GetXaxis()->FindBin(mean-2.5*sigma), hbk->GetXaxis()->FindBin(mean+2.5*sigma));
   double sp_counts = hsig->Integral(hbk->GetXaxis()->FindBin(mean-3*sigma), hbk->GetXaxis()->FindBin(mean+3*sigma));
   double significance = yield_counts/sqrt(sp_counts);
   double s_me = yield_me/(fit->GetParError(0)/hsig_bk->GetBinWidth(1));
@@ -399,24 +391,6 @@ void drawMixDataScanSys_yield(int icut, TString histname, TString topohistname, 
 
   addpdf(pdf);
 
-  //draw the acceptance plots
-  h3bk->GetYaxis()->SetRangeUser(2.988,2.996);
-  h3sig->GetYaxis()->SetRangeUser(2.988,2.996);
-  TH2F* h2bk = (TH2F*)h3bk->Project3D("xz");
-  TH2F* h2sig = (TH2F*)h3sig->Project3D("xz");
-  h2bk->Scale(scale);
-  TH2F* h2sig_bk = (TH2F*)h2sig->Clone("h2sig_bk");
-  h2sig_bk->Add(h2bk,-1);
-  h2sig_bk->GetYaxis()->SetTitle("p_{T} (GeV/c)");
-  h2sig_bk->GetXaxis()->SetTitle("Rapidity");
-  h2sig_bk->RebinX(5);
-  h2sig_bk->RebinY(5);
-  h2sig_bk->Draw("colz");
-  gPad->SetLogz();
-
-  addpdf(pdf);
-
-  gPad->SetLogz(0);
   //draw phase space
 
   // pdf->On();
@@ -426,12 +400,13 @@ void drawMixDataScanSys_yield(int icut, TString histname, TString topohistname, 
   TFile* fMc = TFile::Open(Form("fout_H3L_data_MC_RC_%d_%d.root", centname[centH],centname[centL-1]));
 
   int const nybins = 2;
-  int nptbins[nybins]={ 3, 3};
+
   double edge[nybins][9]={
-     // {1.2,1.5, 1.8, 2.2, 3.2},
-     {1.2,1.6, 2., 3.},
-    // { 0.9,1.2,1.5, 1.8, 2.8}
-    { 0.9,1.3,1.8, 2.8}
+    // { 1,1.5, 2., 2.5, 3.5}, 
+     {1.2, 1.5, 1.8, 2.2, 3.2},
+    // { 0.5, 1.5, 2., 2.5, 3.5},
+    // { 0.5,1.5, 2, 2.5, 3.5},
+    { 0.9,1.2,1.5, 1.8, 2.8}
   };
   TH1F* hPhase[nybins];
   TH1F* hPhaseCor[nybins];
@@ -447,6 +422,7 @@ void drawMixDataScanSys_yield(int icut, TString histname, TString topohistname, 
      yerr[iy] = 0.5*fabs(ybin[iy]-ybin[iy+1]); 
   }
 
+  int nptbins[nybins]={ 4, 4};
   for (int iy=0;iy<nybins;iy++){
     hPhase[iy] = new TH1F(Form("hPhase%d", iy), Form("hPhase%d;pt", iy), 600, 0.5, 3.5);
     hPhase[iy]=(TH1F*)hPhase[iy]->Rebin( nptbins[iy], Form("hPhase%d", iy), edge[iy]);
@@ -474,12 +450,10 @@ void drawMixDataScanSys_yield(int icut, TString histname, TString topohistname, 
   h2Eff->RebinX(2);
   h2Eff->Divide(h2temp);
   // h2Eff->Draw("col text");
-  gPad->SetRightMargin(0.15);
-  h2Eff->Draw("colz");
+  h2Eff->Draw("col");
   h2Eff->GetYaxis()->SetRangeUser(0,4.5);
   h2Eff->GetYaxis()->SetTitle("Efficiency");
   addpdf(pdf);
-  gPad->SetRightMargin(0.05);
 
   TH1F* heff[nybins];
   for (int ij=0;ij<nybins;ij++){ 
@@ -506,7 +480,7 @@ void drawMixDataScanSys_yield(int icut, TString histname, TString topohistname, 
       gPad->SetLogy(0);
       dy = fabs(ybin[ij+1]-ybin[ij]);
       // if (icut!=14) yield = fityield2(histname, edge[ij][ipt], edge[ij][ipt+1], ybin[ij+1], ybin[ij], err, f1, f2, c, pdf, 1, 9); // normal mode
-      yield = fityield2(histname, edge[ij][ipt], edge[ij][ipt+1], ybin[ij+1], ybin[ij], err, f1, f2, c, pdf, centL, centH); // normal mode
+      yield = fityield2(histname, edge[ij][ipt], edge[ij][ipt+1], ybin[ij+1], ybin[ij], err, f1, f2, c, pdf, 1, 9); // normal mode
       // if (icut==14) yield = fityield2(histname, edge[ij][ipt], edge[ij][ipt+1], ybin[ij+1], ybin[ij], err, f1, f2, c, pdf, 1, 9); // normal mode
       // cout << edge[ij][ipt]<<" "<<edge[ij][ipt+1]<<" "<<ybin[ij+1]<<" "<<ybin[ij]<<" "<< yield<<" "<<err <<endl;
       hPhase[ij]->SetBinContent( ipt+1, yield/dy/dpt/pt/2./3.1415926/nEvents_se);
@@ -562,83 +536,16 @@ void drawMixDataScanSys_yield(int icut, TString histname, TString topohistname, 
   pdf->On();
   pdf->Close();
 }
-TGraphErrors* convertTH1toTGraph(TH1* h)
-{
-  int const nbins = h->GetNbinsX();
-  double x[nbins],y[nbins],err[nbins];
-  for (int i = 1; i <= h->GetNbinsX(); i++) {
-    x[i-1] = h->GetBinCenter(i);
-    y[i-1] = h->GetBinContent(i);
-    err[i-1] = h->GetBinError(i);
-    // graph->SetPoint(i-1, x, y);
-    // graph->SetPointError(i-1, 0, ey);
 
-  }
-  TGraphErrors* graph = new TGraphErrors(nbins,x,y,0,err);
-  return graph;
-
-}
-
-double slovefun_x0(TF1* fun, double value, double xl, double xh, double precision=0.0001)
-{
-  int nsteps = 100; //
-  double x_new,newvalue;
-  double fl,fh;
-  fl = fun->Eval(xl);
-  fh = fun->Eval(xh);
-  bool isincrease = true;
-  if (fl>fh) {  
-    isincrease=false;
-    double tmp;
-    tmp=xl;xl=xh;xh=tmp;
-    tmp=fl;fl=fh;fh=tmp;
-  }; 
-  // TH1F* h = new TH1F("h","h",steps,xl,xh);
-  for (int i=0;i<nsteps;i++)
-  {
-    x_new = 0.5*(xl+xh);
-    if (fabs(xh-xl)<=precision) break; 
-    newvalue = fun->Eval(x_new); 
-    if (newvalue<value) {xl=x_new; fl=newvalue;}
-    else if (newvalue>value) { xh=x_new;fh=newvalue;}
-  } 
-  return x_new;
-}
-TGraphErrors* ptshift(TF1* fit, TH1* h)
-{
-  TGraphErrors* g = (TGraphErrors*)convertTH1toTGraph(h);
-  // fit function form should be:     
-  // 
-  double x1,x2,integral,new_x;
-  int nloops = 3;
-  for (int il=0;il<nloops;il++){
-    cout <<"loop: " <<il<<" ";
-    for (int ip =0;ip<h->GetNbinsX();ip++)
-    {
-      x1 = h->GetBinLowEdge(ip+1);
-      x2 = h->GetBinWidth(ip+1)+x1;
-      double integral = fit->Integral(x1,x2)/(x2-x1);
-      double new_x = slovefun_x0(fit,integral,x1,x2,0.0001);
-
-      g->SetPoint(ip, new_x, h->GetBinContent(ip+1));
-      cout << new_x<<" ";
-    }
-    cout<<endl;
-    g->Fit(fit,"N0");
-  }
-  return g;
-}
 void YieldSysCuts(int runscandata=1)
 {
   // int runscandata=1;
-  int const cent=1; // cent=1->0-10, =2->10-50, =0->0-50%
+  int const cent=3; // cent=1->0-10, =2->10-50, =0->0-50%
   TString centname[4]={"0080", "0010", "1040","0040"};
   TString centname2[4]={"0-80", "0-10", "10-40","0-40"};
   int centhigh[4]={8,8,6,8};
   int centlow[4]={0,7,4,4};
   int centnum[10]={80,70,60,50,40,30,20,10,5,0};
-  int cent2b;
-  if (cent==1) cent2b=1; 
   
   SetsPhenixStyle();
   TCanvas* cc= new TCanvas();
@@ -670,7 +577,6 @@ void YieldSysCuts(int runscandata=1)
   TString cutsname[nsys]={"chi2topo<3","chi2topo<5","chi2ndf<3","chi2ndf<5","pi chi2prim>3","pi chi2prim>40","nHitsFit>15","nHitsFit>25"};
   TFile* f[nsys];
   TH1F* h[5][nsys+1]; 
-  TGraphErrors* gFit[5][nsys+1]; 
   cout <<"start .. " << endl;
 
   double br[nsys+1], brerr[nsys+1], y3brelerr[nsys+1];
@@ -678,10 +584,9 @@ void YieldSysCuts(int runscandata=1)
                       kGray+2, kMagenta,  kSpring+4, kGreen+2, kBlue+1, kOrange+5,
                       kBlack, kCyan+2, kViolet-1, kPink+10, kTeal+2, kAzure+2,
                       kYellow-3, kMagenta+1 ,kRed
-                };
+                    };
   // TLegend* leg = new TLegend(0.2,0.2,0.5,0.5);
   int const ny = 2;
-  // double yedge[ny+1]={0,-0.25,-0.5,-1.};
   double yedge[ny+1]={0,-0.5,-1.};
   // double yedge[ny+1]={0, -0.2,-0.4, -0.6, -0.8};
   double syserr[ny][10], pt[ny][10], err[ny][10], yield[ny][10], toterr[ny][10];
@@ -696,8 +601,7 @@ void YieldSysCuts(int runscandata=1)
   cyield->cd();
   gPad->SetLogy();
   // TH1F* hpad = new TH1F("hpad", "hpad;p_{T} (GeV/c); B.r.#timesd^{2}N/2#pidp_{T}dy", 10, 1, 3.);
-  TH1F* hpad = new TH1F("hpad", "hpad;p_{T} (GeV/c); B.R.#timesd^{2}N/2#pip_{T}dp_{T}dy (c^{2}/GeV^{2})", 10, 0.5, 3.5);
-  // TH1F* hpad = new TH1F("hpad", "hpad;p_{T} (GeV/c); d^{2}N/2#pip_{T}dp_{T}dy (c^{2}/GeV^{2})", 10, 0.5, 3.5);
+  TH1F* hpad = new TH1F("hpad", "hpad;p_{T} (GeV/c); d^{2}N/2#pip_{T}dp_{T}dy (c^{2}/GeV^{2})", 10, 0.5, 3.5);
   hpad->GetYaxis()->SetRangeUser(6e-10, 5e-2);
   hpad->GetYaxis()->SetNdivisions(504);
   hpad->GetXaxis()->SetNdivisions(406);
@@ -789,14 +693,6 @@ void YieldSysCuts(int runscandata=1)
     ptpt3exp[i]->SetLineColor(kOrange+7);
 
     if(cent==1 || cent==0 || cent==3){
-      // bw[0]=GetBGBWdNdpt(_pmass,-4.2e+05 , 1.996e-01 , 8.72736e+04,  31658.2*scale[0], "bw[0]");
-      // bw[1]=GetBGBWdNdpt(_pmass,-4.2e+05, 1.996e-01, 8.72736e+04, 31658.2*scale[1], "bw[1]");
-      // bw[2]=GetBGBWdNdpt(_pmass,-43.19e+05, 1.816e-01, 8.72736e+04, 16778.1*scale[2], "bw[2]");
-      // bw[3]=GetBGBWdNdpt(_pmass,-43.19e+05, 1.816e-01, 8.72736e+04, 16778.1*scale[3], "bw[3]");
-      // bw[0]=GetBGBWdNdpt(_pmass,-4.2e+05 , 1.996e-01 , 8.72736e+04,  16, "bw[0]");
-      // bw[1]=GetBGBWdNdpt(_pmass,-4.2e+05, 1.996e-01, 8.72736e+04, 16, "bw[1]");
-      // bw[2]=GetBGBWdNdpt(_pmass,-43.19e+05, 1.816e-01, 8.72736e+04, 16, "bw[2]");
-      // bw[3]=GetBGBWdNdpt(_pmass,-43.19e+05, 1.816e-01, 8.72736e+04, 16, "bw[3]");
       bw[0]=GetBGBWdNdpt(_pmass,-1.92877e+05 , 3.61565e-01 , 8.72736e+04, 1.63704e+01, "bw[0]");
       bw[1]=GetBGBWdNdpt(_pmass,-1.76682e+05, 2.68207e-01, 8.72736e+04, 1.80140e+02, "bw[1]");
       bw[2]=GetBGBWdNdpt(_pmass,-2.25520e+05, 2.51423e-01, 8.72736e+04, 3.96031e+01, "bw[2]");
@@ -818,35 +714,11 @@ void YieldSysCuts(int runscandata=1)
     // ptbw[i]->SetLineColor(kMagenta+2);
 	}
 
-
-  //Draw 3 GeV
-  TFile* f2b = new TFile(Form("twobody_yuehang/spectra_final_cent%d_particle1_v21.root",cent2b));
-  TGraphErrors* g2b[3];
-  g2b[0] = (TGraphErrors*)f2b->Get("t_sgct1_corr_yield[0][0]");
-  g2b[1] = (TGraphErrors*)f2b->Get("t_sgct1_corr_yield[0][1]");
-  g2b[2] = (TGraphErrors*)f2b->Get("t_sgct1_corr_yield[0][2]");
-  f2b->Close();
-  TFile* f2bsys = new TFile(Form("twobody_yuehang/spectra_final_cent%d_particle1_v21.root", cent2b));
-  TGraphErrors* g2bsys[3];
-  g2bsys[0] = (TGraphErrors*)f2bsys->Get("t_sgct1_corr_yield_sys_0[0]");
-  g2bsys[1] = (TGraphErrors*)f2bsys->Get("t_sgct1_corr_yield_sys_0[1]");
-  g2bsys[2] = (TGraphErrors*)f2bsys->Get("t_sgct1_corr_yield_sys_0[2]");
-  f2bsys->Close();
-  graphscale(g2b[0], 1./scale[0]);
-  graphscale(g2b[1], 1./scale[1]);
-  graphscale(g2b[2], 1./scale[2]);
-
-  graphscale(g2bsys[0], 1./scale[0]);
-  graphscale(g2bsys[1], 1./scale[1]);
-  graphscale(g2bsys[2], 1./scale[2]);
   double const R3=0.3;
 
   cout <<"calculate dN/dy" << endl;  
-  TLegend* leg = new TLegend(0.18,0.17,0.4,0.34);
-  leg->SetHeader("    FXT 3.9 GeV");
+  TLegend* leg = new TLegend(0.18,0.18,0.4,0.4);
   leg->SetTextSize(0.05);
-  TF1* funtest[5];
-  TGraphErrors* gtest[5];
   for (int ic=0; ic<ny; ic++) 
   {
     cout <<"y:"<<ic<<" read hists" << endl;
@@ -868,7 +740,7 @@ void YieldSysCuts(int runscandata=1)
     cout <<"y:"<<ic<<" calculate systematics for each bin" << endl;
     for (int ip=0;ip<h[ic][nsys]->GetNbinsX();ip++)
     {
-       // pt[ic][ip]=h[ic][nsys]->GetBinCenter(ip+1);
+       pt[ic][ip]=h[ic][nsys]->GetBinCenter(ip+1);
        err[ic][ip]=h[ic][nsys]->GetBinError(ip+1);
        yield[ic][ip]=h[ic][nsys]->GetBinContent(ip+1);
        syserr[ic][ip]=0;
@@ -914,19 +786,6 @@ void YieldSysCuts(int runscandata=1)
        cout<<yield[ic][ip]<<" "<< err[ic][ip]<<" rel: "<< syserr[ic][ip]/yield[ic][ip]<<endl;
     }
 
-    h[ic][nsys]->Fit(mtexp[ic],"NI0");
-    // mtexp[ic]->DrawCopy("same");
-    funtest[ic] = (TF1*)mtexp[ic]->Clone("newtest");
-    gtest[ic] = (TGraphErrors*)ptshift(funtest[ic],h[ic][nsys]);
-    // funtest[ic]->SetLineColor(kBlack);
-    // gtest[ic] = (TGraphErrors*)convertTH1toTGraph(h[ic][nsys]);
-    // setHistStyle(gtest[ic],nycol[ic]-3, kOpenCircle, 1.5, 0);
-    // gtest[ic]->Draw("psame");
-    // funtest[ic]->DrawCopy("same");
-    for (int ip=0;ip<gtest[ic]->GetN();ip++){
-      pt[ic][ip] =gtest[ic]->GetPointX(ip); 
-    }
-
     gYieldSys[ic] = new TGraphErrors(nbins[ic], pt[ic], yield[ic], 0, syserr[ic]);
     gYieldSys[ic]->SetName(Form("gYieldsys_%s_%d", centname[cent].Data(), ic));
     gYieldToterr[ic] = new TGraphErrors(nbins[ic], pt[ic], yield[ic], 0, toterr[ic]);
@@ -940,7 +799,7 @@ void YieldSysCuts(int runscandata=1)
     setHistStyle(gYieldSys[ic],nycol[ic], kFullCircle, 1.5, 0);
     // graphscale(gYield[ic], 1./((1-R3)*0.98*2./3.));
     // graphscale(gYieldSys[ic], 1./((1-R3)*0.98*2./3.));
-    //
+
     drawGraphWithSys(gYield[ic], gYieldSys[ic], nycol[ic], kFullCircle, 1.5, 1, 0,0.03);
     gYield[ic]->Fit(mtexp[ic],"N");
     mtexp[ic]->DrawCopy("same");
@@ -948,25 +807,6 @@ void YieldSysCuts(int runscandata=1)
     if (ic==2) leg->AddEntry(gYield[ic], Form("y=(%0.1f,%0.2f)#times10^{%d}",yedge[ic],yedge[ic+1], -1*ic),"pe");
     if (ic==1) leg->AddEntry(gYield[ic], Form("y=(%0.2f,%0.1f)#times10^{%d}",yedge[ic],yedge[ic+1], -1*ic),"pe");
     if (ic==0) leg->AddEntry(gYield[ic], Form("y=(%0.0f,%0.2f)",yedge[ic],yedge[ic+1]),"pe");
-
-    if (ic==0) {
-      graphscale(g2b[0], scale[ic]);
-      graphscale(g2bsys[0], scale[ic]);
-      graphscale(g2b[1], scale[ic]);
-      graphscale(g2bsys[1], scale[ic]);
-      setHistStyle(g2b[0], nycol[ic], kOpenCircle, 1.5, 0);
-      setHistStyle(g2bsys[0], nycol[ic], kOpenCircle, 1.5, 0);
-      setHistStyle(g2b[1], nycol[ic], kOpenSquare, 1.4, 0);
-      setHistStyle(g2bsys[1], nycol[ic], kOpenSquare, 1.4, 0);
-      drawGraphWithSys(g2b[0], g2bsys[0], kOrange, kOpenCircle, 1.5, 1, 0,0.03);
-      drawGraphWithSys(g2b[1], g2bsys[1], kMagenta, kOpenSquare, 1.4, 1, 0,0.03);
-    }
-    if (ic==1) {
-      graphscale(g2b[2], scale[ic]);
-      graphscale(g2bsys[2], scale[ic]);
-      drawGraphWithSys(g2b[2], g2bsys[2], nycol[ic], kOpenDiamond, 1.5, 1, 0,0.03);
-    }
-    
   }
   leg->Draw();
 
@@ -974,21 +814,20 @@ void YieldSysCuts(int runscandata=1)
   gempty->SetMarkerColor(0);
   gempty->SetLineColor(0);
 
-  TLegend* l2b = new TLegend( 0.18, 0.34, 0.4, 0.54);
-  l2b->SetHeader("    FXT 3 GeV");
+  TLegend* l2b = new TLegend( 0.65, 0.18, 0.85, 0.38);
   l2b->SetTextSize(0.05);
-  // l2b->SetNColumns(3);
-  l2b->AddEntry(g2b[0],"y=(0,-0.25)","p");
+  l2b->SetNColumns(3);
+  // l2b->AddEntry(g2b[0]," ","p");
   // // l2b->AddEntry();
-  l2b->AddEntry(g2b[1],"y=(-0.5,-0.25)","p");
-  l2b->AddEntry(g2b[2],"y=(-0.75,-0.5)#times10^{-1}","pe");
+  // l2b->AddEntry(g2b[1],"","p");
+  // // l2b->AddEntry(g2b[2],"{}^{3}_{#Lambda}H#rightarrow ^{3}He#pi","pe");
   // l2b->AddEntry(gempty,"{}^{3}_{#Lambda}H#rightarrow ^{3}He#pi","p");
-  l2b->Draw();
+  // l2b->Draw();
   // TLegend* l3b = new TLegend( 0.2, 0.8, 0.5, 0.9);
   // l3b->SetTextSize(0.055);
   // l3b->SetNColumns(3);
-  // l2b->AddEntry(gYieldSys[0]," ","p");
-  // l2b->AddEntry(gYieldSys[1]," ","p");
+  l2b->AddEntry(gYieldSys[0]," ","p");
+  l2b->AddEntry(gYieldSys[1]," ","p");
   // l2b->AddEntry(g2b[1],"","pe");
   // l2b->AddEntry(g2b[2],"{}^{3}_{#Lambda}H#rightarrow{}^{3}He#pi","pe");
   // l2b->AddEntry(gYieldSys[2],"{}^{3}_{#Lambda}H#rightarrowp#pid","p");
@@ -1000,7 +839,7 @@ void YieldSysCuts(int runscandata=1)
   // drawSTAR(0.6,0.85,0.05);
   drawLatex(0.2,0.85,"Run 2020 Au+Au #sqrt{s_{NN}} = 3.9 GeV",0.05);
   // drawLatex(0.2,0.85,"Au+Au 3 GeV",0.05);
-  drawLatex(0.2, 0.78, Form("%s%s", centname2[cent].Data(),"%"), 0.05);
+  drawLatex(0.25, 0.42, Form("%s%s", centname2[cent].Data(),"%"), 0.05);
   addpdf(pdf);
   gPad->SaveAs(Form("plots/spectra_%d.pdf", cent));
   cc->cd();
@@ -1039,73 +878,55 @@ void YieldSysCuts(int runscandata=1)
 
       h[ic][is]->Draw("same");
       // g2b[ic]->Draw("p same");
-      h[ic][is]->Fit(bolt[ic], "BI");
+      h[ic][is]->Fit(bolt[ic], "B");
       // g2b[ic]->Fit(bolt[ic], "B");
       bolt[ic]->GetParameters(par);
       ptbolt[ic]->SetParameters(par[0], par[1], _pmass);
       bolt[ic]->Draw("same");
 
-      h[ic][is]->Fit(mtexp[ic], "BI");
-      // if (is<nsys) h[ic][is]->Fit(mtexp[ic], "BI");
-      // else if (is==nsys) {
-      //   TFitResultPtr r = h[ic][is]->Fit(mtexp[ic], "BSI");
-      //   dndystat[ic] = ptmtexp[ic]->IntegralError(0,10,r->GetParams(), r->GetCovarianceMatrix().GetMatrixArray() )/scale[ic];
-      //   dndystatpt4[ic] = ptmtexp[ic]->IntegralError(0.4*3,10,r->GetParams(), r->GetCovarianceMatrix().GetMatrixArray() )/scale[ic];
-      // }
+      if (is<nsys) h[ic][is]->Fit(mtexp[ic], "B");
+      else if (is==nsys) {
+        TFitResultPtr r = h[ic][is]->Fit(mtexp[ic], "BS");
+        dndystat[ic] = ptmtexp[ic]->IntegralError(0,10,r->GetParams(), r->GetCovarianceMatrix().GetMatrixArray() )/scale[ic];
+        dndystatpt4[ic] = ptmtexp[ic]->IntegralError(0.4*3,10,r->GetParams(), r->GetCovarianceMatrix().GetMatrixArray() )/scale[ic];
+      }
       // g2b[ic]->Fit(mtexp[ic], "B");
       mtexp[ic]->GetParameters(par);
       ptmtexp[ic]->SetParameters(par[0], par[1], _pmass);
       mtexp[ic]->Draw("same");
 
-      h[ic][is]->Fit(pt2exp[ic], "BI");
+      h[ic][is]->Fit(pt2exp[ic], "B");
       // g2b[ic]->Fit(pt2exp[ic], "B");
       pt2exp[ic]->GetParameters(par);
       ptpt2exp[ic]->SetParameters(par[0], par[1], _pmass);
       pt2exp[ic]->Draw("same");
 
-      h[ic][is]->Fit(pt3exp[ic], "BI");
+      h[ic][is]->Fit(pt3exp[ic], "B");
       // g2b[ic]->Fit(pt3exp[ic], "B");
       pt3exp[ic]->GetParameters(par);
       ptpt3exp[ic]->SetParameters(par[0], par[1]);
       pt3exp[ic]->Draw("same");
 
-      h[ic][is]->Fit(bw[ic],"BI"); 
+      h[ic][is]->Fit(bw[ic],"B"); 
       // g2b[ic]->Fit(bw[ic],"B"); 
       bw[ic]->GetParameters(par);
       ptbw[ic]->SetParameters(_pmass,bw[ic]->GetParameter(1),bw[ic]->GetParameter(2),bw[ic]->GetParameter(3),bw[ic]->GetParameter(4)*2*TMath::Pi());
       bw[ic]->Draw("same");
 
-      // //integral dndydpt in measured region
-      // dndymd[ic][is][0] = ptbolt[ic]->Integral( 0, 10)/scale[ic];
-      // dndymd[ic][is][1] = ptmtexp[ic]->Integral( 0, 10)/scale[ic];
-      // dndymd[ic][is][2] = ptpt2exp[ic]->Integral( 0, 10)/scale[ic];
-      // dndymd[ic][is][3] = ptpt3exp[ic]->Integral( 0, 10)/scale[ic];
-      // dndymd[ic][is][4] = ptbw[ic]->Integral( 0, 10)/scale[ic];
-      //
-      // dndymdpt4[ic][is][0] = ptbolt[ic]->Integral( 0.4*3, 10)/scale[ic];
-      // dndymdpt4[ic][is][1] = ptmtexp[ic]->Integral( 0.4*3, 10)/scale[ic];
-      // dndymdpt4[ic][is][2] = ptpt2exp[ic]->Integral( 0.4*3, 10)/scale[ic];
-      // dndymdpt4[ic][is][3] = ptpt3exp[ic]->Integral( 0.4*3, 10)/scale[ic];
-      // dndymdpt4[ic][is][4] = ptbw[ic]->Integral( 0.4*3, 10)/scale[ic];
+      //integral dndydpt in measured region
+      dndymd[ic][is][0] = ptbolt[ic]->Integral( 0, 10)/scale[ic];
+      dndymd[ic][is][1] = ptmtexp[ic]->Integral( 0, 10)/scale[ic];
+      dndymd[ic][is][2] = ptpt2exp[ic]->Integral( 0, 10)/scale[ic];
+      dndymd[ic][is][3] = ptpt3exp[ic]->Integral( 0, 10)/scale[ic];
+      dndymd[ic][is][4] = ptbw[ic]->Integral( 0, 10)/scale[ic];
 
-      double sumerr=0;
-      dndymd[ic][is][0] = SumHist( 0, 10, h[ic][is], ptbolt[ic], sumerr)/scale[ic];
-      dndymd[ic][is][1] = SumHist( 0, 10, h[ic][is], ptmtexp[ic], dndystat[ic])/scale[ic];
-      dndymd[ic][is][2] = SumHist( 0, 10, h[ic][is], ptpt2exp[ic], sumerr)/scale[ic];
-      dndymd[ic][is][3] = SumHist( 0, 10, h[ic][is], ptpt3exp[ic], sumerr)/scale[ic];
-      dndymd[ic][is][4] = SumHist( 0, 10, h[ic][is], ptbw[ic], sumerr)/scale[ic];
+      dndymdpt4[ic][is][0] = ptbolt[ic]->Integral( 0.4*3, 10)/scale[ic];
+      dndymdpt4[ic][is][1] = ptmtexp[ic]->Integral( 0.4*3, 10)/scale[ic];
+      dndymdpt4[ic][is][2] = ptpt2exp[ic]->Integral( 0.4*3, 10)/scale[ic];
+      dndymdpt4[ic][is][3] = ptpt3exp[ic]->Integral( 0.4*3, 10)/scale[ic];
+      dndymdpt4[ic][is][4] = ptbw[ic]->Integral( 0.4*3, 10)/scale[ic];
 
-      dndymdpt4[ic][is][0] = SumHist( 0.4*3, 10, h[ic][is], ptbolt[ic], sumerr)/scale[ic];
-      dndymdpt4[ic][is][1] = SumHist( 0.4*3, 10, h[ic][is], ptmtexp[ic], dndystatpt4[ic])/scale[ic];
-      dndymdpt4[ic][is][2] = SumHist( 0.4*3, 10, h[ic][is], ptpt2exp[ic], sumerr)/scale[ic];
-      dndymdpt4[ic][is][3] = SumHist( 0.4*3, 10, h[ic][is], ptpt3exp[ic], sumerr)/scale[ic];
-      dndymdpt4[ic][is][4] = SumHist( 0.4*3, 10, h[ic][is], ptbw[ic], sumerr)/scale[ic];
-
-      dndystatpt4[ic]/=scale[ic];
-      dndystat[ic]/=scale[ic];
-
-
- 
+      
       dndy[ic][is]=0;
       dndypt4[ic][is]=0;
       // for (int im=0;im<nmodel;im++)
@@ -1171,8 +992,7 @@ void YieldSysCuts(int runscandata=1)
   }
   for (int ic=0;ic<ny;ic++)
   {
-    cout << "mtexp fit parameters:  "<<  my[ic]<<" " <<ptmtexp[ic]->GetParameter(0)<<", "<< ptmtexp[ic]->GetParameter(1)/scale[ic]<< ", "<<  ptmtexp[ic]->GetParameter(2)<< endl;
-    cout << "blast wave fit parameters:  "<<  my[ic]<<" " <<ptbw[ic]->GetParameter(0)<<", "<< ptbw[ic]->GetParameter(1)/scale[ic]<< ", "<<  ptbw[ic]->GetParameter(2)<< ", "<<  ptbw[ic]->GetParameter(3)<<", " <<ptbw[ic]->GetParameter(4)<< endl;
+    cout << "parameters:  "<<  my[ic]<<" " <<ptmtexp[ic]->GetParameter(0)<<", "<< ptmtexp[ic]->GetParameter(1)/scale[ic]<< ", "<<  ptmtexp[ic]->GetParameter(2)<< endl;
   }
 
   gPad->SetLogy(0);
@@ -1182,7 +1002,7 @@ void YieldSysCuts(int runscandata=1)
   hpad3->GetYaxis()->SetTitleOffset(0.8);
   hpad3->GetXaxis()->SetTitleOffset(1);
   // hpad3->GetYaxis()->SetRangeUser(0,3e-2);
-  hpad3->GetYaxis()->SetRangeUser(0,10e-3);
+  hpad3->GetYaxis()->SetRangeUser(0,40e-3);
   hpad3->GetYaxis()->SetTitleSize(0.06);
   hpad3->GetXaxis()->SetTitleSize(0.06);
   hpad3->GetYaxis()->SetLabelSize(0.06);
@@ -1194,63 +1014,48 @@ void YieldSysCuts(int runscandata=1)
   // TGraphErrors* gdndysys = new TGraphErrors(ny-1, my+1, dndym+1, 0, dndysys+1); 
   TGraphErrors* gdndystat = new TGraphErrors(ny, my, dndym, 0, dndystat); 
   TGraphErrors* gdndysys = new TGraphErrors(ny, my, dndym, 0, dndysys); 
-  gdndysys->SetName("gdndysys_2b"); 
-  gdndystat->SetName("gdndystat_2b"); 
+  gdndysys->SetName("gdndysys_3b"); 
+  gdndystat->SetName("gdndystat_3b"); 
 
   TGraphErrors* gdndystatpt4 = new TGraphErrors(ny, my, dndympt4, 0, dndystatpt4); 
   TGraphErrors* gdndysyspt4 = new TGraphErrors(ny, my, dndympt4, 0, dndysyspt4); 
-  gdndysyspt4->SetName("gdndysys_2b_pt4"); 
-  gdndystatpt4->SetName("gdndystat_2b_pt4"); 
+  gdndysyspt4->SetName("gdndysys_3b_pt4"); 
+  gdndystatpt4->SetName("gdndystat_3b_pt4"); 
 
   // drawGraphWithSys(gdndystat, gdndysys, kPink+3, kFullCircle, 1.5, 1, 0);
-  drawGraphWithSys(gdndystat, gdndysys, kPink+3, kFullCircle, 1.5, 1, 0);
+  drawGraphWithSys(gdndystat, gdndysys, kPink+2, kFullCircle, 1.5, 1, 0);
   //
   // TGraphErrors* gdndysys_md = new TGraphErrors(ny-1, my+1, dndym+1, 0, dndysys_model+1); 
   TGraphErrors* gdndysys_md = new TGraphErrors(ny, my, dndym, 0, dndysys_model); 
-  // drawGraphWithSys(gdndystat, gdndysys_md, kPink+3, kFullCircle, 1.5, 1, 0);
+  drawGraphWithSys(gdndystat, gdndysys_md, kPink+3, kFullCircle, 1.5, 1, 0);
 
   //10-50
   // double my2b[2]={-0.125, -0.375};
   // double val2b[2]={ 0.000491959, 0.000883598};
   // double stat2b[2]={ 0.000103048, 0.000136774};
   // double sys2b[2]={ 0.000225092, 0.000335826};
-  double yshift = 0.0;
-  // TFile* fh3l2b  = new TFile("twobody_yuehang/h4l_he3_he4_dndy.root");
-  // TGraphErrors* g2bdndysys = (TGraphErrors*)fh3l2b->Get(Form("brxh3l_dndy_%s_sys", centname[cent2b].Data()));
-  // TGraphErrors* g2bdndystat = (TGraphErrors*)fh3l2b->Get(Form("brxh3l_dndy_%s_stat", centname[cent2b].Data()));
-  // g2bdndystat->SetName("gdndystat_2b3GeV");
-  // g2bdndysys->SetName("gdndysys_2b3GeV");
-
-  // // double yshift = 0.0;
+  double yshift = 0.02;
+  // double yshift = 0.0;
   double my2b[2]={-0.125+yshift, -0.375+yshift};
   double val2b[2]={ 0.00282647, 0.00348034};
   double stat2b[2]={ 0.000523963, 0.000960732};
   double sys2b[2]={ 0.000605459, 0.00105419};
   TGraphErrors* g2bdndystat = new TGraphErrors( 2, my2b, val2b, 0, stat2b);
   TGraphErrors* g2bdndysys = new TGraphErrors( 2, my2b, val2b, 0, sys2b);
-  g2bdndystat->SetName("gdndystat_2b3GeV");
-  g2bdndysys->SetName("gdndysys_2b3GeV");
-  // // graphscale( g2bdndysys, (1-R3)/R3);  
+  g2bdndystat->SetName("gdndystat_2b");
+  g2bdndysys->SetName("gdndysys_2b");
+  // graphscale( g2bdndysys, (1-R3)/R3);  
   // graphscale( g2bdndystat, (1-R3)/R3);  
+  drawGraphWithSys(g2bdndystat, g2bdndysys, kBlue+3, kFullCircle, 1.5, 1, 0);
   drawLatex( 0.2, 0.2, Form("%s%s", centname2[cent].Data(),"%"),0.055);
 
-  TFile* f3GeVH3L3b = new TFile(Form("fsysYield_H3L_cent%s_preliminary.root", centname[cent].Data()));
-  TGraphErrors* gH3L3b_3GeV_stat = (TGraphErrors*)f3GeVH3L3b->Get("gdndystat_3b");
-  TGraphErrors* gH3L3b_3GeV_sys = (TGraphErrors*)f3GeVH3L3b->Get("gdndysys_3b");
-  graphscale( gH3L3b_3GeV_stat, R3*0.9822*2./3.);  
-  graphscale( gH3L3b_3GeV_sys, R3*0.9822*2./3.);  
-  drawGraphWithSys(gH3L3b_3GeV_stat, gH3L3b_3GeV_sys, kGreen+3, kOpenCircle, 1.5, 1, 0);
-
-  drawGraphWithSys(g2bdndystat, g2bdndysys, kAzure-1, kFullCircle, 1.5, 1, 0);
-
   TLegend* ldndy = new TLegend( 0.2,0.7,0.5,0.9);
-  ldndy->AddEntry( g2bdndysys, " {}^{3}_{#Lambda}H#rightarrow {}^{3}He#pi (3 GeV)", "pfe");
-  ldndy->AddEntry( gH3L3b_3GeV_sys, " ^{3}_{#Lambda}H#rightarrow dp#pi (3 GeV)", "pfe");
-  // ldndy->AddEntry( gdndysys_md, " ^{3}_{#Lambda}H#rightarrow ^{3}He#pi (sys.: model only)","pfe");
-  // ldndy->AddEntry( gdndysys, " ^{3}_{#Lambda}H#rightarrow ^{3}He#pi (sys.: model+Topo.)", "pfe");
-  ldndy->AddEntry( gdndysys, " {}^{3}_{#Lambda}H#rightarrow {}^{3}He#pi (3.9 GeV)", "pfe");
+  ldndy->AddEntry( g2bdndysys, " ^{3}_{#Lambda}H#rightarrow ^{3}He#pi#times(1-R_{3})/R_{3}", "pfe");
+  ldndy->AddEntry( gdndysys_md, " ^{3}_{#Lambda}H#rightarrow dp#pi(sys.: model only)","pfe");
+  ldndy->AddEntry( gdndysys, " ^{3}_{#Lambda}H#rightarrow dp#pi(sys.: model+Topo.)", "pfe");
   // ldndy->AddEntry( gdndysys, " ^{3}_{#Lambda}H#rightarrow dp#pi", "pfe");
   ldndy->Draw();
+
   addpdf(pdf);
 
   // drawLatex( );
@@ -1265,38 +1070,32 @@ void YieldSysCuts(int runscandata=1)
   // TGraphErrors* gcombdndysys  = (TGraphErrors*)combinechannels_sys(g2bdndysys, gdndysys, gcombdndystat, "gcombdndysys");
   TGraphErrors* gcombdndystat  = g2bdndystat;
   TGraphErrors* gcombdndysys  = g2bdndysys;
-  gPad->Clear(); 
-  hpad3->GetYaxis()->SetTitle("B.R.#timesdN/dy");
-  hpad3->Draw();
-  shiftGraghX(gH3L3b_3GeV_sys, 0.015);
-  shiftGraghX(gH3L3b_3GeV_stat, 0.015);
-  drawGraphWithSys(gH3L3b_3GeV_stat, gH3L3b_3GeV_sys, kGreen+3, kOpenCircle, 1.5, 1, 0);
-  drawGraphWithSys(g2bdndystat, g2bdndysys, kAzure-1, kOpenCircle, 1.5, 1, 0);
-  // drawGraphWithSys(gcombdndystat, gcombdndysys, kGreen+2, kFullCircle, 1.5, 1, 0);
-  drawGraphWithSys(gdndystat, gdndysys, kPink+3, kFullCircle, 1.5, 1, 0);
-  TGraph* gjam0_10 = new TGraph("model/H3L2b_0_10cent.csv");
-  gjam0_10->SetName("gjam0_10");
-  // graphscale( gjam0_10, 1.*0.001/((R3)*0.9822*2./3.));
-  graphscale( gjam0_10, 1.*0.001);
-  gjam0_10->SetLineStyle(4);
-  gjam0_10->SetLineWidth(2);
-  gjam0_10->Draw("l same");
 
-  TLegend* ldndycom = new TLegend( 0.2,0.6,0.5,0.9);
+  hpad3->GetYaxis()->SetTitle("dN/dy");
+  hpad3->Draw();
+  drawGraphWithSys(g2bdndystat, g2bdndysys, kBlue+3, kFullCircle, 1.5, 1, 0);
+  drawGraphWithSys(gcombdndystat, gcombdndysys, kGreen+2, kFullCircle, 1.5, 1, 0);
+  drawGraphWithSys(gdndystat, gdndysys, kPink+2, kFullCircle, 1.5, 1, 0);
+  // TGraph* gjam0_10 = new TGraph("../model/H3L2b_0_10cent.csv");
+  // gjam0_10->SetName("gjam0_10");
+  // graphscale( gjam0_10, 1.*0.001/((R3)*0.9822*2./3.));
+  // gjam0_10->SetLineStyle(4);
+  // gjam0_10->SetLineWidth(2);
+  // gjam0_10->Draw("l same");
+
+  TLegend* ldndycom = new TLegend( 0.2,0.7,0.5,0.9);
   ldndycom->SetTextSize(0.06);
-  ldndycom->AddEntry( g2bdndysys, "{}^{3}_{#Lambda}H#rightarrow {}^{3}He#pi (3 GeV)", "pfe");
-  ldndycom->AddEntry( gH3L3b_3GeV_sys, "{}^{3}_{#Lambda}H#rightarrow dp#pi (3 GeV) (#times(1-R_{3})/R_{3})", "pfe");
-  ldndycom->AddEntry( gdndysys, "{}^{3}_{#Lambda}H#rightarrow {}^{3}He#pi (3.9 GeV)","pfe");
+  ldndycom->AddEntry( g2bdndysys, "{}^{3}_{#Lambda}H#rightarrow ^{3}He#pi", "pfe");
+  ldndycom->AddEntry( gdndysys, " ^{3}_{#Lambda}H#rightarrow dp#pi","pfe");
   // ldndycom->AddEntry( gdndysys_md, " ^{3}_{#Lambda}H#rightarrow dp#pi(sys.: model only)","pfe");
   // ldndycom->AddEntry( gdndysys, " ^{3}_{#Lambda}H#rightarrow dp#pi(sys.: model+Topo.)", "pfe");
-  // ldndycom->AddEntry( gcombdndysys, "comb. ^{3}_{#Lambda}H#rightarrow ^{3}He#pi and ^{3}_{#Lambda}H#rightarrow dp#pi", "pfe");
-  ldndycom->AddEntry( gjam0_10, "coales.(JAM)", "l");
+  ldndycom->AddEntry( gcombdndysys, "comb. ^{3}_{#Lambda}H#rightarrow ^{3}He#pi and ^{3}_{#Lambda}H#rightarrow dp#pi", "pfe");
+  // ldndycom->AddEntry( gjam0_10, "coales.(JAM)", "l");
   ldndycom->Draw();
   // drawSTAR( 0.6, 0.2,0.06);
-  drawLatex( 0.7, 0.2, Form("%s%s", centname2[cent].Data(),"%"), 0.06);
+  drawLatex( 0.7, 0.28, "0-40%", 0.06);
   drawLatex( 0.2, 0.2, "Au+Au #sqrt{s_{NN}} = 3.9 GeV", 0.06);
-  gPad->SaveAs(Form("dNdy_%s.pdf", centname[cent].Data()));
-  cout <<"dn/dy y="<<yedge[1] <<"<y< "<< yedge[0]<<" "<<dndym[0]<< " stat:"<< dndystat[0]<<" sys:"<< dndysys[0]<< endl;
+  gPad->SaveAs("dNdy_0_10.pdf");
 
   pdf->On();
   pdf->Close();
@@ -1307,7 +1106,7 @@ void YieldSysCuts(int runscandata=1)
     gYield[iy]->Write();
     gYieldSys[iy]->Write();
     gYieldToterr[iy]->Write();
-    mtexp[iy]->SetParameter(1, mtexp[iy]->GetParameter(1)*1.); //
+    mtexp[iy]->SetParameter(1, mtexp[iy]->GetParameter(1)*1./((1-R3)*0.98*2./3.)); //times Br
     mtexp[iy]->Write();
     h[iy][nsys]->Write(); // before times BR
   }
@@ -1316,10 +1115,10 @@ void YieldSysCuts(int runscandata=1)
   gdndystatpt4->Write();
   gdndysyspt4->Write();
   // gjam0_10->Write();
-  // g2bdndysys->Write();
-  // g2bdndystat->Write();
-  // gcombdndysys->Write();
-  // gcombdndystat->Write();
+  g2bdndysys->Write();
+  g2bdndystat->Write();
+  gcombdndysys->Write();
+  gcombdndystat->Write();
 
   fresult->Close();
   
@@ -1401,7 +1200,7 @@ void drawEfficiency()
   c->cd();
   gPad->SaveAs("plots/eff_0_10_small.pdf");
 }
-void drawData_00_10()
+void drawData_00_40()
 {
   // YieldSysCuts(1); 
   YieldSysCuts(0); 
