@@ -380,7 +380,7 @@ void readtree(TString mInputlist="Lambda_tree_mc.root", int const mode = 1,   TS
       } 
 
       //for He3 PID
-      bool passTopoCuts = ht_l >lcut&& ht_l>lcuthigh && ht_ldl>ldlcut && ht_chi2topo<chi2topocut && ht_chi2topo>0 &&  fabs(p_He)>pHecutLow && fabs(p_He)<pHecut && fabs(p_pi)<ppicut && ht_chi2ndf<chi2ndfcut && ht_chi2ndf>0  && chi2primary_pi>chi2_picut && chi2primary_he>chi2_hecut && bpl>bplcut && dcaCut && nhitscut;
+      bool passTopoCuts = ht_l >lcut&& ht_l<lcuthigh && ht_ldl>ldlcut && ht_chi2topo<chi2topocut && ht_chi2topo>0 &&  fabs(p_He)>pHecutLow && fabs(p_He)<pHecut && fabs(p_pi)<ppicut && ht_chi2ndf<chi2ndfcut && ht_chi2ndf>0  && chi2primary_pi>chi2_picut && chi2primary_he>chi2_hecut && bpl>bplcut && dcaCut && nhitscut;
 
       int const nmax = 20;
       bool passTopoCutsSys[nmax];
